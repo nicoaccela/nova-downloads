@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nova: a personal chief of staff in your terminal</title>
+<meta name="description" content="Nova is a personal chief of staff that runs on Claude Code in your terminal. It talks, texts, remembers, and runs a fleet of AI workers for you.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f5f1ff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0c0b16" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="apple-touch-icon" href="assets/nova-mark-dark.svg">
+<script>
+  /* theme before paint: ?theme= wins, then a saved choice, then the system */
+  (function () {
+    var q = new URLSearchParams(location.search).get('theme');
+    var saved = null; try { saved = localStorage.getItem('nova-theme'); } catch (e) {}
+    var t = q || saved;
+    if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.dataset.theme = t;
+    if (new URLSearchParams(location.search).get('motion') === 'reduce') document.documentElement.classList.add('rm');
+    if (/[?&]shot\b/.test(location.search)) document.documentElement.classList.add('shot');
+  })();
+</script>
+<style>
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: url("assets/fonts/PlusJakartaSans-var.woff2") format("woff2");
+  font-weight: 200 800; font-style: normal; font-display: swap;
+}
+
+/* ---------- tokens ---------- */
+:root {
+  --sky-top:#f5f1ff; --sky-mid:#f3f0fd; --sky-bot:#eef6fb;
+  --fv:#9f86f3; --fv2:#b196f8; --ft:#7fcfe6; --fc:#a0e3f1; --fm:#ee8fbf; --fp:#f4b6d0; --fl:#dcbcfb; --fcore:#f8d6f3;
+  --fo:.62;
+  --ink:#1b1531; --body:#2d2843; --muted:#5a5570; --faint:#77728c;
+  --line:rgba(76,48,170,.14); --line-strong:rgba(76,48,170,.24);
+  --glass:rgba(255,255,255,.72); --glass-strong:rgba(255,255,255,.88); --glass-line:rgba(91,53,224,.16);
+  --shadow:0 24px 60px -30px rgba(60,40,140,.38), 0 2px 8px -4px rgba(60,40,140,.14);
+  --thread:#5b2fd6; --thread-glow:#8b5cf6; --star:#5a3cc8; --halo:#9b74f2; --core:#ffffff;
+  --accent:#5b2fd6; --accent-ink:#ffffff; --accent-soft:rgba(124,58,237,.10);
+  --cyan:#0b8fb0; --pink:#c2407f; --violet:#6d3fe0;
+  --code-bg:#17142a; --code-ink:#efeaff; --code-muted:#a79fc9;
+  --ok:#0a7d76;
+  --focus:0 0 0 3px rgba(109,63,224,.38);
+  --radius:20px;
+}
+[data-theme="dark"] {
+  --sky-top:#0c0b16; --sky-mid:#100e1c; --sky-bot:#12101d;
+  --fv:#5a3ce4; --fv2:#732bf8; --ft:#00aacf; --fc:#62e3f2; --fm:#f64697; --fp:#ee9abd; --fl:#c899fe; --fcore:#f5bbf1;
+  --fo:.55;
+  --ink:#f4f2fb; --body:#e3e0ee; --muted:#bdb8d0; --faint:#9c97b3;
+  --line:rgba(220,200,255,.11); --line-strong:rgba(220,200,255,.2);
+  --glass:rgba(20,18,33,.66); --glass-strong:rgba(22,20,36,.86); --glass-line:rgba(200,170,255,.15);
+  --shadow:0 28px 70px -30px rgba(0,0,0,.85), 0 0 0 1px rgba(200,170,255,.04);
+  --thread:#ece4fb; --thread-glow:#c9b5ff; --star:#ebe6ff; --halo:#f3dcff; --core:#ffffff;
+  --accent:#c9b5ff; --accent-ink:#15122a; --accent-soft:rgba(167,139,250,.16);
+  --cyan:#62e3f2; --pink:#f08ab8; --violet:#c9b5ff;
+  --code-bg:#0b0a14; --code-ink:#f1ecff; --code-muted:#a79fc9;
+  --ok:#5cc6b0;
+  --focus:0 0 0 3px rgba(201,181,255,.5);
+}
+
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; -webkit-text-size-adjust:100%; }
+.rm, .rm *, .shot, .shot * { scroll-behavior:auto !important; }
+body {
+  margin:0; font-family:"Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size:16px; line-height:1.6; color:var(--body); background:var(--sky-top);
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+a { color:inherit; }
+img, svg { display:block; }
+:focus-visible { outline:none; box-shadow:var(--focus); border-radius:10px; }
+.sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+.skip { position:absolute; left:16px; top:-60px; z-index:50; background:var(--glass-strong); color:var(--ink); padding:10px 14px; border-radius:12px; text-decoration:none; font-weight:600; }
+.skip:focus { top:12px; }
+
+/* mark swaps with the theme */
+.mk-d { display:none; } [data-theme="dark"] .mk-d { display:block; } [data-theme="dark"] .mk-l { display:none; }
+
+/* ---------- space: sky, nebula, stars, grain (fixed behind everything) ---------- */
+.space { position:fixed; inset:0; z-index:-1; overflow:hidden; pointer-events:none;
+  background:linear-gradient(180deg, var(--sky-top), var(--sky-mid) 55%, var(--sky-bot)); }
+.neb { position:absolute; inset:0; animation:hue 30s ease-in-out infinite alternate; }
+.f { position:absolute; border-radius:50%; opacity:calc(var(--a) * var(--fo));
+  background:radial-gradient(closest-side, var(--c) 0%, color-mix(in srgb, var(--c) 90%, transparent) 18%, color-mix(in srgb, var(--c) 70%, transparent) 36%,
+    color-mix(in srgb, var(--c) 44%, transparent) 54%, color-mix(in srgb, var(--c) 20%, transparent) 72%, color-mix(in srgb, var(--c) 7%, transparent) 86%, transparent 100%);
+  animation:drift var(--d,20s) ease-in-out infinite alternate; animation-delay:var(--dl,0s); will-change:transform; }
+@keyframes drift {
+  0% { transform:translate3d(0,0,0) scale(1); }
+  50% { transform:translate3d(var(--dx,30px), var(--dy,-20px), 0) scale(var(--s1,1.08)); }
+  100% { transform:translate3d(calc(var(--dx,30px) * -.6), calc(var(--dy,-20px) * .8), 0) scale(var(--s2,.95)); }
+}
+@keyframes hue { from { filter:hue-rotate(-8deg) saturate(1); } to { filter:hue-rotate(12deg) saturate(1.1); } }
+#stars { position:absolute; inset:0; width:100%; height:100%; }
+.grain { position:absolute; inset:0; opacity:.05; mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  background-size:160px; }
+/* the lower page is calmer so long reading stays easy */
+.veil { position:absolute; inset:0; background:linear-gradient(180deg, transparent 0%, transparent 35%, color-mix(in srgb, var(--sky-bot) 45%, transparent) 100%); }
+
+/* ---------- nav ---------- */
+.nav { position:sticky; top:0; z-index:20; }
+.nav-in { max-width:1180px; margin:0 auto; padding:14px 28px; display:flex; align-items:center; gap:18px; }
+.nav::before { content:""; position:absolute; inset:0; background:color-mix(in srgb, var(--sky-top) 70%, transparent);
+  -webkit-backdrop-filter:blur(14px) saturate(1.2); backdrop-filter:blur(14px) saturate(1.2);
+  border-bottom:1px solid var(--line); opacity:0; transition:opacity .3s; }
+.nav.stuck::before { opacity:1; }
+.brand { position:relative; display:flex; align-items:center; gap:10px; text-decoration:none; font-weight:800; font-size:17px; color:var(--ink); letter-spacing:-.01em; }
+.brand img { width:28px; height:28px; border-radius:7px; }
+.links { position:relative; display:flex; gap:4px; margin-left:auto; align-items:center; }
+.links a { text-decoration:none; color:var(--muted); font-size:14px; font-weight:600; padding:7px 12px; border-radius:999px; }
+.links a:hover { color:var(--ink); background:var(--accent-soft); }
+.theme { position:relative; margin-left:6px; width:38px; height:38px; border-radius:999px; border:1px solid var(--line-strong);
+  background:var(--glass); color:var(--ink); display:grid; place-items:center; cursor:pointer; }
+.theme svg { width:18px; height:18px; }
+.theme .sun { display:none; } [data-theme="dark"] .theme .sun { display:block; } [data-theme="dark"] .theme .moon { display:none; }
+
+/* ---------- hero ---------- */
+.hero { position:relative; overflow:hidden; margin-top:-66px; padding:66px 0 0; }
+.hero-in { position:relative; max-width:1180px; margin:0 auto; padding:72px 28px 110px; display:grid; grid-template-columns:1.08fr .92fr; gap:40px; align-items:center; min-height:640px; }
+.hero-copy { position:relative; z-index:2; }
+.eyebrow { display:inline-flex; align-items:center; gap:8px; font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--violet);
+  padding:6px 12px 6px 8px; border-radius:999px; background:var(--glass); border:1px solid var(--glass-line); }
+.eyebrow i { width:8px; height:8px; border-radius:50%; background:var(--cyan); box-shadow:0 0 0 4px color-mix(in srgb, var(--cyan) 22%, transparent); }
+h1 { margin:22px 0 14px; font-size:clamp(64px, 9vw, 120px); line-height:.95; font-weight:800; letter-spacing:-.045em; color:var(--ink); }
+h1 span { background:linear-gradient(100deg, var(--ink) 30%, color-mix(in srgb, var(--violet) 80%, var(--ink)) 62%, color-mix(in srgb, var(--pink) 75%, var(--ink)) 100%);
+  -webkit-background-clip:text; background-clip:text; color:transparent; padding-right:.04em; }
+.promise { font-size:clamp(19px, 2vw, 23px); line-height:1.5; color:var(--body); max-width:34ch; margin:0 0 30px; font-weight:500; }
+.promise b { color:var(--ink); font-weight:700; }
+.ctas { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+.btn { display:inline-flex; align-items:center; gap:10px; text-decoration:none; font-weight:700; font-size:15.5px; border-radius:999px; padding:13px 22px; border:1px solid transparent; cursor:pointer; font-family:inherit; }
+.btn-primary { background:var(--accent); color:var(--accent-ink); box-shadow:0 10px 30px -12px color-mix(in srgb, var(--accent) 70%, transparent); }
+.btn-primary:hover { filter:brightness(1.08); }
+.btn-ghost { background:var(--glass); color:var(--ink); border-color:var(--line-strong); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
+.btn-ghost:hover { border-color:var(--accent); }
+.btn svg { width:17px; height:17px; }
+.facts { display:flex; flex-wrap:wrap; gap:8px 18px; margin:30px 0 0; padding:0; list-style:none; color:var(--muted); font-size:14px; font-weight:600; }
+.facts li { display:flex; align-items:center; gap:8px; }
+.facts li::before { content:""; width:6px; height:6px; border-radius:50%; background:var(--thread-glow); box-shadow:0 0 8px var(--thread-glow); }
+
+/* the art: the mark floats, the thread runs through it and across the hero */
+.art { position:relative; z-index:1; width:100%; max-width:480px; aspect-ratio:1; justify-self:center; animation:float 9s ease-in-out infinite alternate; }
+.art .thread-svg { position:absolute; left:0; top:0; width:100%; height:100%; overflow:visible; z-index:0; }
+.tile { position:absolute; left:23%; top:23%; width:54%; height:54%; z-index:1; }
+.tile img { width:100%; height:100%; border-radius:22.3%;
+  box-shadow:0 40px 90px -30px color-mix(in srgb, var(--thread-glow) 55%, transparent), 0 0 0 1px var(--glass-line); }
+.tile::before { content:""; position:absolute; inset:-28%; z-index:-1; border-radius:50%;
+  background:radial-gradient(closest-side, color-mix(in srgb, var(--halo) 42%, transparent), color-mix(in srgb, var(--fm) 16%, transparent) 55%, transparent 100%);
+  animation:breathe 7s ease-in-out infinite alternate; }
+@keyframes float { from { transform:translateY(-6px) rotate(-.6deg); } to { transform:translateY(8px) rotate(.6deg); } }
+@keyframes breathe { from { opacity:.7; transform:scale(.96); } to { opacity:1; transform:scale(1.04); } }
+.th-glow { fill:none; stroke:var(--thread-glow); stroke-width:7; stroke-linecap:round; opacity:.38; filter:blur(3px); }
+.th-core { fill:none; stroke:var(--thread); stroke-width:1.7; stroke-linecap:round; opacity:.9; }
+[data-theme="light"] .th-core { stroke-width:2.2; }
+.bead { fill:var(--core); }
+.bead-halo { fill:url(#beadGlow); }
+.tip { fill:url(#tipGlow); animation:breathe 5s ease-in-out infinite alternate; transform-box:fill-box; transform-origin:center; }
+
+/* ---------- sections ---------- */
+main { position:relative; }
+.sec { max-width:1180px; margin:0 auto; padding:88px 28px; }
+.sec-head { max-width:720px; margin:0 0 40px; }
+.kicker { font-size:13px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--violet); margin:0 0 10px; display:flex; align-items:center; gap:10px; }
+.kicker::before { content:""; width:28px; height:2px; border-radius:2px; background:linear-gradient(90deg, var(--cyan), var(--violet), var(--pink)); }
+h2 { font-size:clamp(32px, 4vw, 46px); line-height:1.1; letter-spacing:-.03em; color:var(--ink); margin:0 0 14px; font-weight:800; }
+.lede { font-size:18px; color:var(--body); margin:0; }
+h3 { font-size:19px; line-height:1.3; letter-spacing:-.01em; color:var(--ink); margin:0 0 8px; font-weight:750; }
+.glass { background:var(--glass); border:1px solid var(--glass-line); border-radius:var(--radius); box-shadow:var(--shadow);
+  -webkit-backdrop-filter:blur(18px) saturate(1.15); backdrop-filter:blur(18px) saturate(1.15); }
+
+/* what Nova does */
+.cards { display:grid; grid-template-columns:repeat(3, 1fr); gap:18px; }
+.card { padding:26px 24px 24px; position:relative; overflow:hidden; transition:transform .35s cubic-bezier(.2,1,.3,1), border-color .3s; }
+.card:hover { transform:translateY(-3px); border-color:var(--line-strong); }
+.card::after { content:""; position:absolute; right:-60px; top:-60px; width:180px; height:180px; border-radius:50%; opacity:.55;
+  background:radial-gradient(closest-side, color-mix(in srgb, var(--tint) 45%, transparent), transparent); pointer-events:none; }
+.card p { margin:0; color:var(--body); font-size:15.5px; }
+.ico { width:46px; height:46px; border-radius:14px; display:grid; place-items:center; margin:0 0 18px;
+  background:color-mix(in srgb, var(--tint) 14%, transparent); border:1px solid color-mix(in srgb, var(--tint) 30%, transparent); color:var(--tint); }
+.ico svg { width:24px; height:24px; }
+.t-v { --tint:var(--violet); } .t-c { --tint:var(--cyan); } .t-p { --tint:var(--pink); }
+
+/* what gets set up */
+.setup-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:18px; }
+.mod { padding:22px 22px 20px; }
+.mod h3 { display:flex; align-items:center; gap:10px; font-size:17px; }
+.mod h3 .dot { width:10px; height:10px; border-radius:50%; background:var(--tint); box-shadow:0 0 10px var(--tint); flex:none; }
+.mod .opt { margin-left:auto; font-size:11.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted);
+  border:1px solid var(--line-strong); border-radius:999px; padding:2px 8px; }
+.checks { list-style:none; margin:10px 0 0; padding:0; display:grid; gap:9px; }
+.checks li { position:relative; padding-left:28px; font-size:15px; line-height:1.45; color:var(--body); }
+.checks li::before { content:""; position:absolute; left:0; top:2px; width:18px; height:18px; border-radius:6px;
+  background:color-mix(in srgb, var(--tint) 16%, transparent); border:1px solid color-mix(in srgb, var(--tint) 40%, transparent); }
+.checks li::after { content:""; position:absolute; left:6px; top:5px; width:5px; height:9px; border:solid var(--tint); border-width:0 2px 2px 0; transform:rotate(45deg); }
+.checks code, .undo code, .req code { white-space:nowrap; font-family:ui-monospace, "SF Mono", Menlo, monospace; font-size:.88em; background:var(--accent-soft); padding:1px 6px; border-radius:6px; color:var(--ink); }
+
+/* timeline */
+.how { display:grid; grid-template-columns:.9fr 1.1fr; gap:48px; align-items:start; }
+.time-card { padding:26px; position:sticky; top:96px; }
+.big-time { font-size:56px; font-weight:800; letter-spacing:-.04em; line-height:1; color:var(--ink); margin:6px 0 8px; }
+.big-time small { font-size:20px; font-weight:700; letter-spacing:-.01em; color:var(--muted); margin-left:6px; }
+.time-card p { margin:0 0 14px; }
+.bar { display:flex; height:10px; border-radius:999px; overflow:hidden; margin:18px 0 10px; background:var(--accent-soft); }
+.bar i { display:block; height:100%; }
+.legend { display:grid; gap:6px; font-size:13.5px; color:var(--muted); margin:0; padding:0; list-style:none; }
+.legend li { display:flex; gap:8px; align-items:center; } .legend b { color:var(--ink); font-weight:700; margin-left:auto; }
+.legend i { width:10px; height:10px; border-radius:3px; }
+.steps { list-style:none; margin:0; padding:0; position:relative; counter-reset:s; }
+.steps::before { content:""; position:absolute; left:23px; top:24px; bottom:24px; width:2px; border-radius:2px;
+  background:linear-gradient(180deg, var(--cyan), var(--violet) 50%, var(--pink)); opacity:.7; }
+.step { position:relative; padding:0 0 30px 72px; }
+.step:last-child { padding-bottom:0; }
+.num { position:absolute; left:0; top:0; width:48px; height:48px; border-radius:50%; display:grid; place-items:center;
+  font-weight:800; font-size:18px; color:var(--ink); background:var(--glass-strong); border:1px solid var(--glass-line); box-shadow:var(--shadow); }
+.step:last-child .num { color:#fff; background:radial-gradient(circle at 50% 50%, #fff 0 14%, color-mix(in srgb, var(--halo) 90%, transparent) 36%, var(--violet) 100%); border-color:transparent;
+  box-shadow:0 0 0 6px color-mix(in srgb, var(--halo) 22%, transparent), 0 0 34px color-mix(in srgb, var(--halo) 70%, transparent); }
+.step:last-child .num span { opacity:0; }
+.step h3 { padding-top:10px; display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; }
+.step h3 em { font-style:normal; font-size:13px; font-weight:700; color:var(--muted); background:var(--accent-soft); border-radius:999px; padding:2px 10px; }
+.step p { margin:0; font-size:15.5px; }
+.sub { list-style:none; padding:0; margin:12px 0 0; display:grid; gap:8px; }
+.sub li { padding:10px 14px; border-radius:12px; background:var(--glass); border:1px solid var(--glass-line); font-size:14.5px; }
+.sub b { color:var(--ink); }
+
+/* the one command */
+.cmd-wrap { padding:34px; position:relative; overflow:hidden; }
+.cmd-wrap::before { content:""; position:absolute; inset:0; pointer-events:none; opacity:.55;
+  background:radial-gradient(55% 90% at 12% 100%, color-mix(in srgb, var(--fc) 34%, transparent), transparent 70%), radial-gradient(50% 80% at 92% 0%, color-mix(in srgb, var(--fm) 30%, transparent), transparent 70%); }
+.cmd-wrap > * { position:relative; }
+.cmd { display:flex; align-items:stretch; gap:0; background:var(--code-bg); border-radius:16px; border:1px solid rgba(200,170,255,.18);
+  box-shadow:0 30px 60px -30px rgba(20,10,60,.7), inset 0 1px 0 rgba(255,255,255,.05); overflow:hidden; margin:22px 0 16px; }
+.cmd pre { margin:0; padding:20px 22px; flex:1; overflow-x:auto; font:500 15.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace; color:var(--code-ink); white-space:pre-wrap; word-break:break-word; }
+.cmd pre .p { color:#8fe8f5; user-select:none; margin-right:10px; }
+.cmd pre .a { color:#d9c8ff; } .cmd pre .s { color:#ffb3d4; } .cmd pre .o { color:var(--code-muted); }
+.copy { flex:none; display:flex; align-items:center; gap:8px; padding:0 20px; border:0; border-left:1px solid rgba(200,170,255,.16); cursor:pointer;
+  background:linear-gradient(180deg, rgba(201,181,255,.14), rgba(201,181,255,.06)); color:#f1ecff; font:700 14.5px/1 "Plus Jakarta Sans", sans-serif; min-width:118px; justify-content:center; }
+.copy:hover { background:linear-gradient(180deg, rgba(201,181,255,.24), rgba(201,181,255,.1)); }
+.copy svg { width:17px; height:17px; }
+.copy .ok-i { display:none; } .copy.done .ok-i { display:block; } .copy.done .cp-i { display:none; } .copy.done { color:#9ff2e0; }
+.note { display:flex; gap:12px; align-items:flex-start; font-size:15px; padding:14px 16px; border-radius:14px; background:var(--accent-soft); border:1px solid var(--glass-line); margin:0; }
+.note svg { flex:none; width:20px; height:20px; color:var(--violet); margin-top:2px; }
+.note b { color:var(--ink); }
+.cmd-meta { display:flex; flex-wrap:wrap; gap:10px 22px; margin:18px 0 0; font-size:14px; color:var(--muted); }
+.cmd-meta span { display:flex; align-items:center; gap:7px; } .cmd-meta svg { width:16px; height:16px; color:var(--ok); }
+
+/* requirements / privacy / undo */
+.trio { display:grid; grid-template-columns:repeat(3, 1fr); gap:18px; }
+.panel { padding:26px 24px; }
+.panel h3 { display:flex; align-items:center; gap:10px; font-size:20px; margin-bottom:14px; }
+.panel h3 .ico { width:38px; height:38px; margin:0; border-radius:12px; } .panel h3 .ico svg { width:20px; height:20px; }
+.req, .priv { list-style:none; margin:0; padding:0; display:grid; gap:12px; }
+.req li, .priv li { font-size:15px; line-height:1.5; padding-left:18px; position:relative; }
+.req li::before, .priv li::before { content:""; position:absolute; left:0; top:.62em; width:7px; height:7px; border-radius:50%; background:var(--tint); }
+.req b, .priv b, .undo b { color:var(--ink); }
+.req .dim { color:var(--muted); font-size:14px; display:block; }
+.undo p { margin:0 0 12px; font-size:15px; }
+.undo p:last-child { margin:0; }
+
+/* footer */
+footer { width:min(1124px, calc(100% - 56px)); margin:0 auto; padding:30px 0 56px; display:flex; flex-wrap:wrap; align-items:center; gap:14px 24px; color:var(--muted); font-size:14px; border-top:1px solid var(--line); }
+footer .brand { font-size:15px; } footer .brand img { width:22px; height:22px; border-radius:5px; }
+footer p { margin:0; } footer .r { margin-left:auto; }
+
+/* reveal on scroll */
+.rv { opacity:0; transform:translateY(18px); transition:opacity .8s ease, transform .8s cubic-bezier(.2,1,.3,1); }
+.rv.in { opacity:1; transform:none; }
+
+/* ---------- responsive ---------- */
+@media (max-width:1020px) {
+  .hero-in { grid-template-columns:1fr; min-height:0; padding-top:40px; gap:10px; }
+  .art { order:-1; max-width:340px; }
+  .cards, .setup-grid, .trio { grid-template-columns:1fr 1fr; }
+  .how { grid-template-columns:1fr; gap:28px; } .time-card { position:relative; top:0; }
+}
+@media (max-width:680px) {
+  .links a { display:none; }
+  .cards, .setup-grid, .trio { grid-template-columns:1fr; }
+  .sec { padding:64px 20px; } .nav-in { padding:12px 20px; } .hero-in { padding:28px 20px 70px; }
+  .cmd { flex-direction:column; } .copy { border-left:0; border-top:1px solid rgba(200,170,255,.16); padding:14px; }
+  .cmd-wrap { padding:22px; } footer { width:calc(100% - 40px); } footer .r { margin-left:0; }
+}
+
+/* ---------- reduced motion: still sky, no drift, no travel ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .f, .neb, .art, .tile::before, .tip { animation:none !important; }
+  .rv { opacity:1; transform:none; transition:none; }
+  .card { transition:none; } html { scroll-behavior:auto; }
+}
+.rm .f, .rm .neb, .rm .art, .rm .tile::before, .rm .tip { animation:none !important; }
+.rm .rv, .shot .rv { opacity:1; transform:none; transition:none; }
+.shot .nav::before { transition:none; }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<div class="space" aria-hidden="true">
+  <div class="neb">
+    <i class="f" style="--c:var(--fv);--a:1;left:-12vw;top:-18vh;width:70vw;height:80vh;--d:19s;--dx:40px;--dy:-26px"></i>
+    <i class="f" style="--c:var(--fv2);--a:.8;left:18vw;top:-24vh;width:52vw;height:62vh;--d:23s;--dx:-34px;--dy:22px;--dl:-6s"></i>
+    <i class="f" style="--c:var(--ft);--a:.62;left:-18vw;top:38vh;width:56vw;height:72vh;--d:21s;--dx:30px;--dy:24px;--dl:-9s"></i>
+    <i class="f" style="--c:var(--fc);--a:.7;left:4vw;top:58vh;width:50vw;height:40vh;--d:17s;--dx:-30px;--dy:-18px;--dl:-3s"></i>
+    <i class="f" style="--c:var(--fm);--a:.86;left:58vw;top:18vh;width:58vw;height:78vh;--d:20s;--dx:-28px;--dy:26px;--dl:-7s"></i>
+    <i class="f" style="--c:var(--fp);--a:.6;left:66vw;top:52vh;width:40vw;height:44vh;--d:15s;--dx:22px;--dy:-16px"></i>
+    <i class="f" style="--c:var(--fl);--a:.8;left:48vw;top:-14vh;width:44vw;height:48vh;--d:18s;--dx:-20px;--dy:26px;--dl:-4s"></i>
+    <i class="f" style="--c:var(--fcore);--a:.55;left:52vw;top:12vh;width:30vw;height:38vh;--d:13s;--dx:12px;--dy:-10px;--s1:1.14;--s2:.9"></i>
+  </div>
+  <canvas id="stars"></canvas>
+  <div class="veil"></div>
+  <div class="grain"></div>
+</div>
+
+<header class="nav" id="nav">
+  <div class="nav-in">
+    <a class="brand" href="#top" aria-label="Nova, back to top">
+      <img class="mk-l" src="assets/nova-mark-light.svg" alt=""><img class="mk-d" src="assets/nova-mark-dark.svg" alt="">
+      Nova
+    </a>
+    <nav class="links" aria-label="Sections">
+      <a href="#does">What it does</a>
+      <a href="#setup">What gets set up</a>
+      <a href="#how">How it goes</a>
+      <a href="#install">Install</a>
+      <a href="#needs">Requirements</a>
+    </nav>
+    <button class="theme" id="themeBtn" type="button" aria-label="Switch to dark theme">
+      <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>
+      <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>
+    </button>
+  </div>
+</header>
+
+<section class="hero" id="top">
+  <div class="hero-in">
+    <div class="hero-copy">
+      <span class="eyebrow"><i></i>Runs on Claude Code</span>
+      <h1><span>Nova</span></h1>
+      <p class="promise">A personal chief of staff that runs on Claude Code in your terminal. It <b>talks</b>, <b>texts</b>, <b>remembers</b>, and <b>runs a fleet of AI workers</b> for you.</p>
+      <div class="ctas">
+        <a class="btn btn-primary" href="#install">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 8 4 4-4 4M12 17h7"/></svg>
+          Get the one command
+        </a>
+        <a class="btn btn-ghost" href="#setup">See what gets set up</a>
+      </div>
+      <ul class="facts" aria-label="At a glance">
+        <li>macOS on Apple Silicon</li>
+        <li>About 40 minutes, start to hello</li>
+        <li>Everything stays on your Mac</li>
+      </ul>
+    </div>
+
+    <div class="art" aria-hidden="true">
+      <!-- The thread continues the mark's own line: it enters at the mark's lower left and leaves at its upper right. -->
+      <svg class="thread-svg" id="threadSvg" viewBox="0 0 480 480">
+        <defs>
+          <radialGradient id="beadGlow"><stop offset="0" stop-color="var(--core)" stop-opacity=".95"/><stop offset=".35" stop-color="var(--halo)" stop-opacity=".55"/><stop offset="1" stop-color="var(--halo)" stop-opacity="0"/></radialGradient>
+          <radialGradient id="tipGlow"><stop offset="0" stop-color="var(--halo)" stop-opacity=".7"/><stop offset=".4" stop-color="var(--halo)" stop-opacity=".22"/><stop offset="1" stop-color="var(--halo)" stop-opacity="0"/></radialGradient>
+          <linearGradient id="fadeL" x1="-360" y1="0" x2="20" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".55" stop-color="#fff" stop-opacity=".75"/><stop offset="1" stop-color="#fff"/></linearGradient>
+          <mask id="threadMask" maskUnits="userSpaceOnUse" x="-1200" y="-600" width="2400" height="1600"><rect x="-1200" y="-600" width="2400" height="1600" fill="url(#fadeL)"/></mask>
+        </defs>
+        <g mask="url(#threadMask)">
+          <path id="thr" class="th-glow" d="M-1100 700 C-420 690 18.6 401.1 168.6 287.1 M312.9 186.3 C394.9 128.3 470 80 540 52"/>
+          <path class="th-core" d="M-1100 700 C-420 690 18.6 401.1 168.6 287.1 M312.9 186.3 C394.9 128.3 470 80 540 52"/>
+        </g>
+        <circle class="tip" cx="540" cy="52" r="46"/>
+        <g id="beadL"><circle class="bead-halo" r="16"/><circle class="bead" r="2.4"/></g>
+      </svg>
+      <div class="tile">
+        <img class="mk-l" src="assets/nova-mark-light.svg" alt="">
+        <img class="mk-d" src="assets/nova-mark-dark.svg" alt="">
+      </div>
+    </div>
+  </div>
+</section>
+
+<main id="main">
+
+  <section class="sec" id="does" aria-labelledby="does-h">
+    <div class="sec-head rv">
+      <p class="kicker">What Nova does</p>
+      <h2 id="does-h">One assistant that keeps the whole day moving.</h2>
+      <p class="lede">Nova lives in a terminal session on your Mac. You talk to it, it answers out loud, and it hands the heavy lifting to workers it keeps an eye on.</p>
+    </div>
+    <div class="cards">
+      <article class="card glass t-v rv">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18c4-1 6-3 8-6s4-5 10-6"/><circle cx="6" cy="16.6" r="2"/><circle cx="12" cy="11" r="2.4" fill="currentColor" fill-opacity=".25"/><circle cx="18" cy="6.8" r="2"/></svg></div>
+        <h3>Runs a fleet of workers</h3>
+        <p>Splits big jobs across parallel Claude Code workers, hears the moment each one finishes, and keeps them moving. You hear about whole results, not every step.</p>
+      </article>
+      <article class="card glass t-c rv">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg></div>
+        <h3>Talks out loud</h3>
+        <p>A natural voice (Kokoro) and local speech recognition, both running on your Mac. Talk hands free, or have any reply read to you.</p>
+      </article>
+      <article class="card glass t-p rv">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 4 3 11l6 2.2L18 7l-7 7.4V20l3.3-3.9L18 19Z"/></svg></div>
+        <h3>Texts you on Telegram</h3>
+        <p>From your own bot, which answers only you. Reach Nova from your phone between meetings and get short, phone-sized replies.</p>
+      </article>
+      <article class="card glass t-v rv">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 7.5 12 12l9-4.5Z"/><path d="m3 12 9 4.5 9-4.5M3 16.5 12 21l9-4.5"/></svg></div>
+        <h3>Remembers what matters</h3>
+        <p>Decisions, people, open loops and where you left off, kept as plain files on your Mac. It picks up the thread after a restart.</p>
+      </article>
+      <article class="card glass t-c rv">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3v5M15 3v5M6.5 8h11v3.5a5.5 5.5 0 0 1-11 0Z"/><path d="M12 17v4"/></svg></div>
+        <h3>Plugs into your work tools</h3>
+        <p>Microsoft 365, Salesforce, Pursuit and Slack, each with your own sign-in. Nova reads first and asks before it changes anything.</p>
+      </article>
+      <article class="card glass t-p rv">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5Z"/></svg></div>
+        <h3>Tuned to your role</h3>
+        <p>Setup reads the notes and skills you already keep for Claude Code and shapes Nova around your work, your cadence and how you like things said.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="sec" id="setup" aria-labelledby="setup-h">
+    <div class="sec-head rv">
+      <p class="kicker">What gets set up</p>
+      <h2 id="setup-h">Everything Nova needs, and nothing it doesn't.</h2>
+      <p class="lede">Grouped the way the installer builds it. The optional parts are asked about during setup, so you only get what you say yes to.</p>
+    </div>
+    <div class="setup-grid">
+      <div class="mod glass t-v rv">
+        <h3><span class="dot"></span>Core</h3>
+        <ul class="checks">
+          <li>The <code>nova</code> launcher and a pinned terminal session to come back to</li>
+          <li>A persona and preferences written from your answers</li>
+          <li>A start-of-session hook that restores context</li>
+          <li>A model and effort setting you can change later</li>
+        </ul>
+      </div>
+      <div class="mod glass t-c rv">
+        <h3><span class="dot"></span>Fleet</h3>
+        <ul class="checks">
+          <li>The <code>fleet</code> command for parallel workers in tmux</li>
+          <li>Silent finish pings, so Nova knows when a worker is done</li>
+          <li>A watcher that brings each ping to Nova</li>
+          <li>An orchestration playbook and a brief template</li>
+        </ul>
+      </div>
+      <div class="mod glass t-p rv">
+        <h3><span class="dot"></span>Memory</h3>
+        <ul class="checks">
+          <li>A local memory folder with recall and remember</li>
+          <li>Handoff notes, so a fresh session picks up where you left off</li>
+          <li>A catch-up routine when you come back</li>
+        </ul>
+      </div>
+      <div class="mod glass t-c rv">
+        <h3><span class="dot"></span>Voice <span class="opt">Optional</span></h3>
+        <ul class="checks">
+          <li>Kokoro text to speech and Whisper speech recognition</li>
+          <li>Both listen on this Mac only</li>
+          <li>Read-aloud you can switch with <code>nova-voice on</code> or <code>off</code></li>
+          <li>Pick your own voice</li>
+        </ul>
+      </div>
+      <div class="mod glass t-p rv">
+        <h3><span class="dot"></span>Telegram <span class="opt">Optional</span></h3>
+        <ul class="checks">
+          <li>Your own bot, created by you in Telegram</li>
+          <li>Paired to your account only, allowlist of one</li>
+          <li>A <code>nova-telegram on</code> or <code>off</code> switch</li>
+          <li>Phone approvals stay off unless you turn them on</li>
+        </ul>
+      </div>
+      <div class="mod glass t-v rv">
+        <h3><span class="dot"></span>Work tools <span class="opt">Optional</span></h3>
+        <ul class="checks">
+          <li>Microsoft 365, Salesforce (read only), Pursuit and Slack</li>
+          <li>You sign in to each one yourself</li>
+          <li>One read-only test call each, to prove it works</li>
+        </ul>
+      </div>
+      <div class="mod glass t-c rv">
+        <h3><span class="dot"></span>Nova's own skills</h3>
+        <ul class="checks">
+          <li>Fleet orchestration and the dispatch and ping rhythm</li>
+          <li>Worker org, handoff and memory keeping</li>
+          <li>Voice mode, the Telegram channel and the persona</li>
+          <li>The daily rhythm pieces Nova runs</li>
+        </ul>
+      </div>
+      <div class="mod glass t-p rv">
+        <h3><span class="dot"></span>Starts with your Mac <span class="opt">Asks first</span></h3>
+        <ul class="checks">
+          <li>Nova opens in your terminal when you log in</li>
+          <li>The fleet watcher runs in the background</li>
+        </ul>
+      </div>
+      <div class="mod glass t-v rv">
+        <h3><span class="dot"></span>Doctor</h3>
+        <ul class="checks">
+          <li>A check of every part, pass or fail, line by line</li>
+          <li>Run it any time something feels off</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="how" aria-labelledby="how-h">
+    <div class="how">
+      <div class="time-card glass rv">
+        <p class="kicker">How it goes</p>
+        <h2 id="how-h">Five steps. One of them is typing.</h2>
+        <div class="big-time">~40<small>minutes</small></div>
+        <p>Most of it is the voice download and your sign-ins. Claude Code walks you through each step and stops to check before moving on.</p>
+        <div class="bar" role="img" aria-label="Time split: about 5 minutes for access, 10 for the build, 25 for guided steps">
+          <i style="width:12%;background:var(--cyan)"></i><i style="width:26%;background:var(--violet)"></i><i style="width:62%;background:var(--pink)"></i>
+        </div>
+        <ul class="legend">
+          <li><i style="background:var(--cyan)"></i>Access and the command<b>~5 min</b></li>
+          <li><i style="background:var(--violet)"></i>Claude Code builds your Nova<b>~10 min</b></li>
+          <li><i style="background:var(--pink)"></i>Guided steps and hello<b>~25 min</b></li>
+        </ul>
+      </div>
+
+      <ol class="steps">
+        <li class="step rv">
+          <div class="num"><span>1</span></div>
+          <h3>Get access to the repo <em>a few minutes</em></h3>
+          <p>Nova's installer lives in a private GitHub repo. Ask the person who shared this page to add your GitHub account.</p>
+        </li>
+        <li class="step rv">
+          <div class="num"><span>2</span></div>
+          <h3>Paste one command <em>10 seconds</em></h3>
+          <p>It clones the repo and opens Claude Code there with one request: set up Nova. <a href="#install">The command is below.</a></p>
+        </li>
+        <li class="step rv">
+          <div class="num"><span>3</span></div>
+          <h3>Claude Code finds your context and builds your Nova <em>about 10 minutes</em></h3>
+          <p>It reads the notes and skills you already keep (read only, it leaves them as they are), asks a few questions about your role, shows you the plan, then installs each part and backs up anything it touches.</p>
+        </li>
+        <li class="step rv">
+          <div class="num"><span>4</span></div>
+          <h3>A few guided steps <em>about 20 minutes</em></h3>
+          <ul class="sub">
+            <li><b>Your Telegram bot.</b> Create it with BotFather, enter the token in a local prompt, then pair it to your account.</li>
+            <li><b>Your sign-ins.</b> Sign in to each work tool with your own account. If one needs an app id, your IT provides it.</li>
+            <li><b>Mic permission.</b> Allow your terminal app to use the microphone, so you can talk to Nova.</li>
+          </ul>
+        </li>
+        <li class="step rv">
+          <div class="num"><span>5</span></div>
+          <h3>Nova says hello, out loud <em>a few seconds</em></h3>
+          <p>A last doctor check, then Nova introduces itself in its new voice and asks what you want to start on.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="sec" id="install" aria-labelledby="install-h">
+    <div class="cmd-wrap glass rv">
+      <p class="kicker">The one command</p>
+      <h2 id="install-h">Paste this in your terminal.</h2>
+      <p class="lede">Claude Code takes it from there and stops to ask before anything that matters.</p>
+      <div class="cmd">
+        <pre id="cmdText"><span class="p" aria-hidden="true">$</span><span class="a">gh repo clone</span> nicoaccela/nova ~/Projects/nova <span class="o">&amp;&amp;</span> <span class="a">cd</span> ~/Projects/nova <span class="o">&amp;&amp;</span> <span class="a">claude</span> <span class="s">"set up Nova"</span></pre>
+        <button class="copy" id="copyBtn" type="button" aria-describedby="cmdText">
+          <svg class="cp-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="3"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+          <svg class="ok-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+          <span id="copyLabel">Copy</span>
+        </button>
+      </div>
+      <p class="note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+        <span><b>This needs access to the private repo.</b> If the clone says "not found", ask the person who shared this page to add your GitHub account, then run it again.</span>
+      </p>
+      <div class="cmd-meta" aria-label="What the command does">
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Safe to run again</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Backs up before it changes a file</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>No logins or app ids in the repo</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="needs" aria-labelledby="needs-h">
+    <div class="sec-head rv">
+      <p class="kicker">Before you start</p>
+      <h2 id="needs-h">What you need, what stays yours, and how to undo it.</h2>
+    </div>
+    <div class="trio">
+      <div class="panel glass t-c rv">
+        <h3><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span>Requirements</h3>
+        <ul class="req">
+          <li><b>A Mac with Apple Silicon</b> (M1 or newer)</li>
+          <li><b>Homebrew</b> <span class="dim">Setup adds tmux, jq, uv, Bun and ffmpeg if they are missing.</span></li>
+          <li><b>Claude Code</b>, signed in with your own account</li>
+          <li><b>GitHub CLI</b> (<code>gh</code>), signed in, with access to the repo</li>
+          <li><b>About 3 GB free</b> for the voice models</li>
+          <li><b>Telegram on your phone</b> <span class="dim">Only if you want to text Nova.</span></li>
+          <li><b>Mac awake and online</b> <span class="dim">Nova lives on your Mac. To reach it from your phone, keep the lid open and on power.</span></li>
+        </ul>
+      </div>
+      <div class="panel glass t-v rv">
+        <h3><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.6 3.1 8.2 7.5 9.5 4.4-1.3 7.5-4.9 7.5-9.5V6Z"/><path d="m9 12 2.2 2.2L15.5 10"/></svg></span>Privacy</h3>
+        <ul class="priv">
+          <li><b>Everything is local.</b> Memory is plain files in your home folder. Voice runs on your Mac and listens on this Mac only.</li>
+          <li><b>Your logins stay yours.</b> Every tool signs in with your own account. The repo holds no logins, tokens or app ids.</li>
+          <li><b>Your bot answers only you.</b> Its token stays on your Mac, and pairing limits it to your account.</li>
+          <li><b>Nothing goes out without your yes.</b> Nova drafts, reads and prepares. Sending, posting and deleting wait for you.</li>
+        </ul>
+      </div>
+      <div class="panel glass t-p undo rv">
+        <h3><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></span>What you can undo</h3>
+        <p><b>All of it.</b> Every file setup changes is backed up first, and its additions sit in clearly marked blocks.</p>
+        <p>To remove Nova, open Claude Code in the repo and say <code>uninstall Nova</code>, or run <code>./setup.sh --uninstall</code>. It restores your backups and lists anything left behind, like Homebrew packages or the voice models, so you can decide.</p>
+        <p>Or switch off just one part: <code>nova-voice off</code>, <code>nova-telegram off</code>, or sign out of a tool.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <a class="brand" href="#top">
+    <img class="mk-l" src="assets/nova-mark-16-light.svg" alt=""><img class="mk-d" src="assets/nova-mark-16-dark.svg" alt="">
+    Nova
+  </a>
+  <p>A personal chief of staff, built on Claude Code.</p>
+  <p class="r">Runs on your Mac. Answers to you.</p>
+</footer>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var mq = matchMedia('(prefers-reduced-motion: reduce)');
+  function reduced() { return mq.matches || root.classList.contains('rm'); }
+
+  /* theme toggle */
+  var btn = document.getElementById('themeBtn');
+  function label() { btn.setAttribute('aria-label', root.dataset.theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'); }
+  label();
+  btn.addEventListener('click', function () {
+    root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem('nova-theme', root.dataset.theme); } catch (e) {}
+    label(); readColors(); if (reduced()) drawStars(0);
+  });
+
+  /* sticky nav gets its glass once you scroll */
+  var nav = document.getElementById('nav');
+  function onScroll() { nav.classList.toggle('stuck', scrollY > 12); }
+  addEventListener('scroll', onScroll, { passive: true }); onScroll();
+
+  /* copy button */
+  var copyBtn = document.getElementById('copyBtn'), copyLabel = document.getElementById('copyLabel');
+  var CMD = 'gh repo clone nicoaccela/nova ~/Projects/nova && cd ~/Projects/nova && claude "set up Nova"';
+  copyBtn.addEventListener('click', function () {
+    function ok() { copyBtn.classList.add('done'); copyLabel.textContent = 'Copied'; setTimeout(function () { copyBtn.classList.remove('done'); copyLabel.textContent = 'Copy'; }, 2200); }
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(CMD).then(ok, fallback); else fallback();
+    function fallback() { var t = document.createElement('textarea'); t.value = CMD; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.opacity = '0';
+      document.body.appendChild(t); t.select(); try { document.execCommand('copy'); ok(); } catch (e) { copyLabel.textContent = 'Select and copy'; } document.body.removeChild(t); }
+  });
+
+  /* reveal on scroll */
+  var rv = document.querySelectorAll('.rv'), SHOT = /[?&]shot\b/.test(location.search);
+  if (SHOT || reduced() || !('IntersectionObserver' in window)) rv.forEach(function (e) { e.classList.add('in'); });
+  else { var io = new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }); }, { rootMargin: '0px 0px -8% 0px' });
+    rv.forEach(function (e) { io.observe(e); }); }
+
+  /* stars: three depths, slow drift, soft twinkle. Still when motion is reduced. */
+  var cv = document.getElementById('stars'), ctx = cv.getContext('2d'), W = 0, H = 0, DPR = 1, stars = [], C = {};
+  function readColors() { var s = getComputedStyle(root); C.star = s.getPropertyValue('--star').trim(); C.dark = root.dataset.theme === 'dark'; }
+  function hex(h, a) { h = h.replace('#', ''); if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+    var n = parseInt(h, 16); return 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',' + a + ')'; }
+  function seed() { var r = 7; return function () { r = (r * 16807) % 2147483647; return r / 2147483647; }; }
+  function size() {
+    DPR = Math.min(2, devicePixelRatio || 1); W = innerWidth; H = innerHeight; cv.width = W * DPR; cv.height = H * DPR; ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    var R = seed(), n = Math.round(W * H / 5200); stars = [];
+    for (var i = 0; i < n; i++) { var d = R(); stars.push({ x: R() * W, y: R() * H, r: d < .75 ? .5 + R() * .5 : d < .95 ? .9 + R() * .6 : 1.4 + R() * .7,
+      a: .25 + R() * .6, ph: R() * 6.28, tw: .3 + R() * 1.1, v: d < .75 ? 2 : d < .95 ? 4.5 : 8 }); }
+  }
+  function drawStars(t) {
+    ctx.clearRect(0, 0, W, H); var k = C.dark ? .95 : .42;
+    for (var i = 0; i < stars.length; i++) { var s = stars[i], tw = reduced() ? .85 : .6 + .4 * Math.sin(t * .001 * s.tw + s.ph);
+      ctx.fillStyle = hex(C.star || '#ffffff', (s.a * tw * k).toFixed(3)); ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 6.283); ctx.fill();
+      if (s.r > 1.4 && C.dark) { ctx.fillStyle = hex(C.star, (s.a * tw * .12).toFixed(3)); ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 4, 0, 6.283); ctx.fill(); } }
+  }
+
+  /* a bead of light travels the thread, pauses at the mark, then rides out past the tip */
+  var thr = document.getElementById('thr'), bead = document.getElementById('beadL'), segLen = 0, L1 = 0;
+  function measure() {
+    var p1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p1.setAttribute('d', 'M-1100 700 C-420 690 18.6 401.1 168.6 287.1');
+    var p2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p2.setAttribute('d', 'M312.9 186.3 C394.9 128.3 470 80 540 52');
+    thr.parentNode.appendChild(p1); thr.parentNode.appendChild(p2);
+    measure.a = p1; measure.b = p2; L1 = p1.getTotalLength(); segLen = p2.getTotalLength();
+    p1.style.display = p2.style.display = 'none';
+  }
+  function placeBead(t) {
+    var cyc = 11000, u = (t % cyc) / cyc, pt, op = 1;
+    if (u < .62) { var e = u / .62; e = 1 - Math.pow(1 - e, 2.2); pt = measure.a.getPointAtLength(Math.max(0, L1 * (.55 + .45 * e))); op = Math.min(1, u / .12); }
+    else if (u < .72) { pt = measure.a.getPointAtLength(L1); op = 1 - (u - .62) / .1; }
+    else if (u < .78) { pt = measure.b.getPointAtLength(0); op = (u - .72) / .06; }
+    else { var f = (u - .78) / .22; pt = measure.b.getPointAtLength(segLen * f); op = 1 - Math.max(0, (f - .7) / .3); }
+    bead.setAttribute('transform', 'translate(' + pt.x.toFixed(1) + ' ' + pt.y.toFixed(1) + ')'); bead.style.opacity = op.toFixed(2);
+  }
+
+  var running = false, last = 0;
+  function frame(t) {
+    if (!running) return;
+    var dt = Math.min(.05, (t - (last || t)) / 1000); last = t;
+    for (var i = 0; i < stars.length; i++) { var s = stars[i]; s.x -= s.v * dt * .35; s.y += s.v * dt * .1; if (s.x < -3) s.x += W + 6; if (s.y > H + 3) s.y -= H + 6; }
+    drawStars(t); placeBead(t); requestAnimationFrame(frame);
+  }
+  function start() {
+    running = false;
+    if (reduced()) { drawStars(0); bead.style.opacity = '0'; return; }
+    if (document.hidden) return;
+    running = true; last = 0; requestAnimationFrame(frame);
+  }
+  readColors(); size(); measure();
+  if (SHOT) {
+    /* review shots: ?shot&at=<section id> hides what comes before it, since headless Chrome cannot scroll */
+    var at = new URLSearchParams(location.search).get('at'), tgt = at && document.getElementById(at);
+    if (tgt) { document.querySelector('.hero').style.display = 'none'; nav.classList.add('stuck');
+      for (var el = tgt.previousElementSibling; el; el = el.previousElementSibling) el.style.display = 'none';
+      tgt.style.paddingTop = '40px'; }
+    drawStars(1800); placeBead(2600); requestAnimationFrame(function () { drawStars(1800); });
+  } else start();
+  addEventListener('resize', function () { size(); if (reduced()) drawStars(0); });
+  document.addEventListener('visibilitychange', start);
+  (mq.addEventListener ? mq.addEventListener('change', start) : mq.addListener(start));
+})();
+</script>
+</body>
+</html>

@@ -243,6 +243,7 @@ h3 { font-size:19px; line-height:1.3; letter-spacing:-.01em; color:var(--ink); m
 .note { display:flex; gap:12px; align-items:flex-start; font-size:15px; padding:14px 16px; border-radius:14px; background:var(--accent-soft); border:1px solid var(--glass-line); margin:0; }
 .note svg { flex:none; width:20px; height:20px; color:var(--violet); margin-top:2px; }
 .note b { color:var(--ink); }
+.note code { font-family:ui-monospace, "SF Mono", Menlo, monospace; font-size:.88em; background:var(--accent-soft); padding:1px 6px; border-radius:6px; color:var(--ink); overflow-wrap:anywhere; }
 .cmd-meta { display:flex; flex-wrap:wrap; gap:10px 22px; margin:18px 0 0; font-size:14px; color:var(--muted); }
 .cmd-meta span { display:flex; align-items:center; gap:7px; } .cmd-meta svg { width:16px; height:16px; color:var(--ok); }
 
@@ -348,7 +349,7 @@ footer p { margin:0; } footer .r { margin-left:auto; }
       </div>
       <ul class="facts" aria-label="At a glance">
         <li>macOS on Apple Silicon</li>
-        <li>About 40 minutes, start to hello</li>
+        <li>About 40 minutes, up to an hour on slow Wi-Fi</li>
         <li>Memory and voice stay on your Mac</li>
       </ul>
     </div>
@@ -570,7 +571,7 @@ footer p { margin:0; } footer .r { margin-left:auto; }
       </div>
       <p class="note">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
-        <span><b>This needs access to the private repo.</b> If the clone says "not found", ask the person who shared this page to add your GitHub account, then run it again.</span>
+        <span><b>This needs access to the private repo.</b> Accept the GitHub invite first. If the clone says "not found", ask the person who shared this page to add your GitHub account, then run it again. No <code>gh</code>? Use <code>git clone https://github.com/nicoaccela/nova.git ~/Projects/nova</code> instead, then <code>cd ~/Projects/nova &amp;&amp; claude "set up Nova"</code>.</span>
       </p>
       <div class="cmd-meta" aria-label="What the command does">
         <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Safe to run again</span>
@@ -592,7 +593,7 @@ footer p { margin:0; } footer .r { margin-left:auto; }
           <li><b>A Mac with Apple Silicon</b> (M1 or newer)</li>
           <li><b>Homebrew</b> <span class="dim">Setup adds tmux, jq, uv, Bun and ffmpeg if they are missing.</span></li>
           <li><b>Claude Code</b>, signed in with your own account</li>
-          <li><b>GitHub CLI</b> (<code>gh</code>), signed in, with access to the repo</li>
+          <li><b>GitHub access</b> to the private repo (invite accepted), with <code>gh</code> signed in or plain <code>git</code></li>
           <li><b>About 3 GB free</b> for the voice models</li>
           <li><b>Telegram on your phone</b> <span class="dim">Only if you want to text Nova.</span></li>
           <li><b>Mac awake and online</b> <span class="dim">Nova lives on your Mac. To reach it from your phone, keep the lid open and on power.</span></li>
@@ -609,8 +610,8 @@ footer p { margin:0; } footer .r { margin-left:auto; }
       </div>
       <div class="panel glass t-p undo rv">
         <h3><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></span>What you can undo</h3>
-        <p><b>All of it.</b> Every file setup changes is backed up first, and its additions sit in clearly marked blocks.</p>
-        <p>To remove Nova, open Claude Code in the repo and say <code>uninstall Nova</code>, or run <code>./setup.sh --uninstall</code>. It restores your backups and lists anything left behind, like Homebrew packages or the voice models, so you can decide.</p>
+        <p><b>Almost all of it.</b> Every file setup replaces is backed up first, and its additions sit in clearly marked blocks.</p>
+        <p>To remove Nova, open Claude Code in the repo and say <code>uninstall Nova</code>, or run <code>./setup.sh --uninstall nova</code>. It restores your backups and lists what it leaves in place on purpose, so you can decide: your brain and hub notes, the Telegram token folder, the connectors, the voice services and models, the Telegram plugin and any Homebrew packages.</p>
         <p>Or switch off just one part: <code>nova-voice off</code>, <code>nova-telegram off</code>, or sign out of a tool.</p>
       </div>
     </div>

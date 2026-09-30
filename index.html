@@ -516,7 +516,7 @@ footer p { margin:0; } footer .r { margin-left:auto; }
           <i style="width:12%;background:var(--cyan)"></i><i style="width:26%;background:var(--violet)"></i><i style="width:62%;background:var(--pink)"></i>
         </div>
         <ul class="legend">
-          <li><i style="background:var(--cyan)"></i>Access and the command<b>~5 min</b></li>
+          <li><i style="background:var(--cyan)"></i>The one command<b>~2 min</b></li>
           <li><i style="background:var(--violet)"></i>Claude Code builds your Nova<b>~10 min</b></li>
           <li><i style="background:var(--pink)"></i>Guided steps and hello<b>~25 min</b></li>
         </ul>
@@ -525,13 +525,13 @@ footer p { margin:0; } footer .r { margin-left:auto; }
       <ol class="steps">
         <li class="step rv">
           <div class="num"><span>1</span></div>
-          <h3>Get access to the repo <em>a few minutes</em></h3>
-          <p>Nova's installer lives in a private GitHub repo. Ask the person who shared this page to add your GitHub account.</p>
+          <h3>Install Claude Code <em>a few minutes</em></h3>
+          <p>If you don't have it yet, install Claude Code and sign in with your own account. That's the only thing to do before the command.</p>
         </li>
         <li class="step rv">
           <div class="num"><span>2</span></div>
           <h3>Paste one command <em>10 seconds</em></h3>
-          <p>It clones the repo and opens Claude Code there with one request: set up Nova. <a href="#install">The command is below.</a></p>
+          <p>It downloads the latest Nova release, checks it, and opens Claude Code with one request: set up Nova. <a href="#install">The command is below.</a></p>
         </li>
         <li class="step rv">
           <div class="num"><span>3</span></div>
@@ -562,7 +562,7 @@ footer p { margin:0; } footer .r { margin-left:auto; }
       <h2 id="install-h">Paste this in your terminal.</h2>
       <p class="lede">Claude Code takes it from there and stops to ask before anything that matters.</p>
       <div class="cmd">
-        <pre id="cmdText"><span class="p" aria-hidden="true">$</span><span class="a">gh repo clone</span> nicoaccela/nova ~/Projects/nova <span class="o">&amp;&amp;</span> <span class="a">cd</span> ~/Projects/nova <span class="o">&amp;&amp;</span> <span class="a">claude</span> <span class="s">"set up Nova"</span></pre>
+        <pre id="cmdText"><span class="p" aria-hidden="true">$</span><span class="a">curl</span> -fsSL https://nicoaccela.github.io/nova-downloads/install.sh <span class="o">|</span> <span class="a">bash</span></pre>
         <button class="copy" id="copyBtn" type="button" aria-describedby="cmdText">
           <svg class="cp-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="3"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
           <svg class="ok-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
@@ -571,7 +571,7 @@ footer p { margin:0; } footer .r { margin-left:auto; }
       </div>
       <p class="note">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
-        <span><b>This needs access to the private repo.</b> Accept the GitHub invite first. If the clone says "not found", ask the person who shared this page to add your GitHub account, then run it again. No <code>gh</code>? Use <code>git clone https://github.com/nicoaccela/nova.git ~/Projects/nova</code> instead, then <code>cd ~/Projects/nova &amp;&amp; claude "set up Nova"</code>.</span>
+        <span><b>No GitHub account needed.</b> It downloads the latest Nova release, checks it against its published fingerprint, unpacks it into <code>~/Projects/nova</code> (backing up any old copy), and starts Claude Code with <code>"set up Nova"</code>. You need Claude Code installed and signed in first.</span>
       </p>
       <div class="cmd-meta" aria-label="What the command does">
         <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Safe to run again</span>
@@ -593,7 +593,6 @@ footer p { margin:0; } footer .r { margin-left:auto; }
           <li><b>A Mac with Apple Silicon</b> (M1 or newer)</li>
           <li><b>Homebrew</b> <span class="dim">Setup adds tmux, jq, uv, Bun and ffmpeg if they are missing.</span></li>
           <li><b>Claude Code</b>, signed in with your own account</li>
-          <li><b>GitHub access</b> to the private repo (invite accepted), with <code>gh</code> signed in or plain <code>git</code></li>
           <li><b>About 3 GB free</b> for the voice models</li>
           <li><b>Telegram on your phone</b> <span class="dim">Only if you want to text Nova.</span></li>
           <li><b>Mac awake and online</b> <span class="dim">Nova lives on your Mac. To reach it from your phone, keep the lid open and on power.</span></li>
@@ -650,7 +649,7 @@ footer p { margin:0; } footer .r { margin-left:auto; }
 
   /* copy button */
   var copyBtn = document.getElementById('copyBtn'), copyLabel = document.getElementById('copyLabel');
-  var CMD = 'gh repo clone nicoaccela/nova ~/Projects/nova && cd ~/Projects/nova && claude "set up Nova"';
+  var CMD = 'curl -fsSL https://nicoaccela.github.io/nova-downloads/install.sh | bash';
   copyBtn.addEventListener('click', function () {
     function ok() { copyBtn.classList.add('done'); copyLabel.textContent = 'Copied'; setTimeout(function () { copyBtn.classList.remove('done'); copyLabel.textContent = 'Copy'; }, 2200); }
     if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(CMD).then(ok, fallback); else fallback();
